@@ -1,16 +1,11 @@
 import bcrypt from 'bcrypt';
-import { db } from '@vercel/postgres'; // Ensure you have correct import for postgres connection
-import { invoices, customers, revenue, users } from '../lib/placeholder-data'; // Ensure placeholder data is correctly imported
+import { db } from '@vercel/postgres';
+import { invoices, customers, revenue, users } from '../lib/placeholder-data';
 
-// Connect to the database
-async function connectToDB() {
-  return await db.connect();
-}
+const client = await db.connect();
 
-// Seed users table
-async function seedUsers(client) {
+async function seedUsers() {
   await client.sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
-
   await client.sql`
     CREATE TABLE IF NOT EXISTS users (
       id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -34,8 +29,9 @@ async function seedUsers(client) {
   return insertedUsers;
 }
 
-// Seed invoices table
-async function seedInvoices(client) {
+async function seedInvoices() {
+  await client.sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
+
   await client.sql`
     CREATE TABLE IF NOT EXISTS invoices (
       id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -47,44 +43,44 @@ async function seedInvoices(client) {
   `;
 
   const insertedInvoices = await Promise.all(
-    invoices.map(invoice => 
-      client.sql`
+    invoices.map(
+      (invoice) => client.sql`
         INSERT INTO invoices (customer_id, amount, status, date)
         VALUES (${invoice.customer_id}, ${invoice.amount}, ${invoice.status}, ${invoice.date})
         ON CONFLICT (id) DO NOTHING;
-      `
+      `,
     ),
   );
 
   return insertedInvoices;
 }
 
-// Seed customers table
-async function seedCustomers(client) {
+async function seedCustomers() {
+  await client.sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
+
   await client.sql`
     CREATE TABLE IF NOT EXISTS customers (
       id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
       name VARCHAR(255) NOT NULL,
-      email VARCHAR(255) NOT NULL UNIQUE,
+      email VARCHAR(255) NOT NULL,
       image_url VARCHAR(255) NOT NULL
     );
   `;
 
   const insertedCustomers = await Promise.all(
-    customers.map(customer => 
-      client.sql`
+    customers.map(
+      (customer) => client.sql`
         INSERT INTO customers (id, name, email, image_url)
         VALUES (${customer.id}, ${customer.name}, ${customer.email}, ${customer.image_url})
         ON CONFLICT (id) DO NOTHING;
-      `
+      `,
     ),
   );
 
   return insertedCustomers;
 }
 
-// Seed revenue table
-async function seedRevenue(client) {
+async function seedRevenue() {
   await client.sql`
     CREATE TABLE IF NOT EXISTS revenue (
       month VARCHAR(4) NOT NULL UNIQUE,
@@ -93,46 +89,34 @@ async function seedRevenue(client) {
   `;
 
   const insertedRevenue = await Promise.all(
-    revenue.map(rev => 
-      client.sql`
+    revenue.map(
+      (rev) => client.sql`
         INSERT INTO revenue (month, revenue)
         VALUES (${rev.month}, ${rev.revenue})
         ON CONFLICT (month) DO NOTHING;
-      `
+      `,
     ),
   );
 
   return insertedRevenue;
 }
 
-// Main seeding function
-export async function seedDatabase() {
-  const client = await connectToDB();
-
+export async function GET() {
+  return Response.json({
+    message:
+      'Uncomment this file and remove this line. You can delete this file when you are finished.',
+  });
   try {
     await client.sql`BEGIN`;
-    await seedUsers(client);
-    await seedCustomers(client);
-    await seedInvoices(client);
-    await seedRevenue(client);
+    await seedUsers();
+    await seedCustomers();
+    await seedInvoices();
+    await seedRevenue();
     await client.sql`COMMIT`;
 
-    return { message: 'Database seeded successfully' };
+    return Response.json({ message: 'Database seeded successfully' });
   } catch (error) {
     await client.sql`ROLLBACK`;
-    console.error('Error seeding database:', error);
-    throw error;
-  } finally {
-    await client.release(); // Ensure client connection is released
-  }
-}
-
-// Example GET request handler
-export async function GET() {
-  try {
-    const result = await seedDatabase();
-    return new Response(JSON.stringify(result), { status: 200 });
-  } catch (error) {
-    return new Response(JSON.stringify({ error: 'Failed to seed the database' }), { status: 500 });
+    return Response.json({ error }, { status: 500 });
   }
 }
